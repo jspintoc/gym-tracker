@@ -1,6 +1,7 @@
 {
   "name": "Gym Tracker",
   "short_name": "Gym Tracker",
+  "id": "./",
   "description": "Personal workout tracker",
   "start_url": "./",
   "scope": "./",
