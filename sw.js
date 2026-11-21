@@ -1,5 +1,5 @@
 // Change this version every time you publish changes to the app files
-const CACHE_NAME = "gym-tracker-v1";
+const CACHE_NAME = "gym-tracker-v2";
 
 // Files the app needs to work offline
 const APP_FILES = [
@@ -14,6 +14,12 @@ const APP_FILES = [
 ];
 
 // 1. Install: save a copy of every app file
+self.addEventListener("install", (event) => {
+  self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES))
+  );
+});
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_FILES))
@@ -30,6 +36,7 @@ self.addEventListener("activate", (event) => {
           .map((name) => caches.delete(name))
       )
     )
+    .then(() => self.clients.claim())
   );
 });
 
