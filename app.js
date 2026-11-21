@@ -383,3 +383,7 @@ app.addEventListener("input", function (event) {
 // ===== 5. START =====
 
 render();
+// Register the service worker (only if the browser supports it)
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("./sw.js");
+}
