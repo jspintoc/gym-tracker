@@ -130,6 +130,63 @@ function toggleDrop(exIndex, setIndex) {
 function deleteSet(exIndex, setIndex) {
   session.exercises[exIndex].sets.splice(setIndex, 1);
 }
+
+// --- Last time (previous session of the same exercise) ---
+
+function findLastTime(exerciseId, currentSession) {
+  let best = null;
+
+  data.sessions.forEach(function (s) {
+    // Only sessions dated before the open one
+    if (s.date >= currentSession.date) {
+      return;
+    }
+
+    // This exercise in that session, only if it has at least one set
+    const entry = s.exercises.find(function (e) {
+      return e.exerciseId === exerciseId && e.sets.length > 0;
+    });
+    if (!entry) {
+      return;
+    }
+
+    // Keep it if it is more recent than the best one found so far
+    if (best === null || s.date > best.date) {
+      best = { date: s.date, entry: entry };
+    }
+  });
+
+  return best;
+}
+
+function formatSets(sets) {
+  // 1. Group consecutive sets with the same weight, unit and type
+  const groups = [];
+
+  sets.forEach(function (set) {
+    const last = groups[groups.length - 1];
+    const sameAsLast = last &&
+      last.weight === set.weight &&
+      last.unit === set.unit &&
+      last.type === set.type;
+
+    if (sameAsLast) {
+      last.reps.push(set.reps);
+    } else {
+      groups.push({ weight: set.weight, unit: set.unit, type: set.type, reps: [set.reps] });
+    }
+  });
+
+  // 2. Turn each group into text, e.g. "20 kg: 12-10-8"
+  return groups.map(function (g) {
+    const reps = g.reps.map(function (r) {
+      return r ?? "?";
+    }).join("-");
+    const weight = g.weight === null ? "" : g.weight + " " + UNIT_LABELS[g.unit] + ": ";
+    const drop = g.type === "drop" ? " (drop)" : "";
+    return weight + reps + drop;
+  }).join(" · ");
+}
 // --- Backup (CSV) ---
 
 const CSV_COLUMNS = [
@@ -397,15 +454,9 @@ function formatDate(isoDate) {
     weekday: "short", day: "numeric", month: "short", year: "numeric"
   });
 }
-
-function render() {
-  if (view === "history") {
-    renderHistory();
-  } else if (view === "session") {
-    renderSession();
-  } else if (view === "picker") {
-    renderPicker();
-  }
+function formatShortDate(isoDate) {
+  const date = new Date(isoDate + "T00:00");
+  return date.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
 }
 
 function renderHistory() {
@@ -457,6 +508,17 @@ function renderSession() {
           <button class="delete" data-action="remove-exercise" data-ex="${exIndex}"
                   aria-label="Remove exercise">×</button>
         </div>`;
+            const lastTime = findLastTime(entry.exerciseId, session);
+    if (lastTime) {
+      const lastNote = lastTime.entry.notes
+        ? `<span class="last-time-note">"${escapeHtml(lastTime.entry.notes)}"</span>`
+        : "";
+      html += `
+        <div class="last-time">
+          <span>Last time · ${formatShortDate(lastTime.date)} — ${escapeHtml(formatSets(lastTime.entry.sets))}</span>
+          ${lastNote}
+        </div>`;
+    }
 
     if (entry.sets.length > 0) {
       html += `

@@ -1,5 +1,5 @@
 // Change this version every time you publish changes to the app files
-const CACHE_NAME = "gym-tracker-v4";
+const CACHE_NAME = "gym-tracker-v5";
 
 // Files the app needs to work offline
 const APP_FILES = [
