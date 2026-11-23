@@ -25,8 +25,10 @@ A personal web app to log gym workouts, set by set. Built from scratch while lea
 - [x] Installable as an app (PWA) and usable offline
 - [x] CSV backup (export / import)
 - [x] Show last time's sets for each exercise
+- [x] Import past workouts from WhatsApp (one-time import via CSV)
 - [ ] Prefill sets from last time
 - [ ] Progressive overload suggestions
 - [ ] Progress charts
+- [ ] Track body weight
+- [ ] Log timed exercises (e.g. plank)
 - [ ] Rename exercises
-- [ ] Import workout history from WhatsApp
