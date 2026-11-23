@@ -8,18 +8,20 @@ A personal web app to log gym workouts, set by set. Built from scratch while lea
 
 - Log each set separately, with its own reps and weight
 - Data stays on your device (browser storage), no accounts or server
-- Works in the mobile browser
+- Installable on the phone's home screen and works offline (PWA)
+- CSV backup: export your sessions and restore them on any device
 
 ## Built with
 
 - HTML, CSS and vanilla JavaScript
 - `localStorage` for data
 - GitHub Pages for hosting
+- Service worker and web app manifest (PWA)
 
 ## Roadmap
 
 - [x] Installable as an app (PWA) and usable offline
-- [ ] CSV backup (export / import)
+- [x] CSV backup (export / import)
 - [ ] Preload the previous session of each exercise
 - [ ] Progressive overload suggestions
 - [ ] Progress charts
