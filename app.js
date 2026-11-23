@@ -86,6 +86,21 @@ function createExercise(name) {
   return exercise;
 }
 
+function countExerciseUses(exerciseId) {
+  // Number of sessions that include this exercise (even with no sets)
+  return data.sessions.filter(function (s) {
+    return s.exercises.some(function (entry) {
+      return entry.exerciseId === exerciseId;
+    });
+  }).length;
+}
+
+function deleteExercise(exerciseId) {
+  data.exercises = data.exercises.filter(function (exercise) {
+    return exercise.id !== exerciseId;
+  });
+}
+
 // --- Exercises and sets inside the open session ---
 
 function addExerciseToSession(exerciseId) {
@@ -431,7 +446,7 @@ function readBackup(text) {
 
 // ===== 2. UI STATE: what is on screen (not saved) =====
 
-let view = "history";   // "history", "session", "picker" or "backup"
+let view = "history";   // "history", "session", "picker", "backup" or "exercises"
 let session = null;     // the session currently open
 let search = "";
 
@@ -462,7 +477,10 @@ function formatShortDate(isoDate) {
 function renderHistory() {
  let html = `
   <button class="primary" data-action="new-session">+ New session</button>
-  <button class="text-button" data-action="open-backup">Backup ›</button>`;
+   <div class="history-links">
+    <button class="text-button" data-action="open-exercises">Exercises ›</button>
+    <button class="text-button" data-action="open-backup">Backup ›</button>
+  </div>`;
 
   const sorted = data.sessions.slice().sort(function (a, b) {
     return b.date.localeCompare(a.date);
@@ -630,6 +648,41 @@ function renderBackup() {
       </label>
     </section>`;
 }
+function renderExercises() {
+  const sorted = data.exercises.slice().sort(function (a, b) {
+    return a.name.localeCompare(b.name);
+  });
+
+  let html = `
+    <button class="back" data-action="close-exercises">← History</button>
+    <h2>Exercises</h2>
+    <p class="empty">Only exercises not used in any session can be deleted.</p>`;
+
+  sorted.forEach(function (exercise) {
+    const uses = countExerciseUses(exercise.id);
+    const usage = uses === 0 ? "unused" : uses + (uses === 1 ? " session" : " sessions");
+    const deleteButton = uses === 0
+      ? `<button class="delete" data-action="delete-exercise" data-id="${exercise.id}"
+                 aria-label="Delete exercise">×</button>`
+      : "";
+
+    html += `
+      <div class="exercise-item">
+        <div>
+          <strong>${escapeHtml(exercise.name)}</strong>
+          <span>${usage}</span>
+        </div>
+        ${deleteButton}
+      </div>`;
+  });
+
+  if (sorted.length === 0) {
+    html += `<p class="empty">No exercises yet.</p>`;
+  }
+
+  app.innerHTML = html;
+}
+
 function render() {
   if (view === "history") {
     renderHistory();
@@ -639,6 +692,8 @@ function render() {
     renderPicker();
   } else if (view === "backup") {
     renderBackup();
+  } else if (view === "exercises") {
+    renderExercises();
   }
 }
 // --- Export the backup as a file ---
@@ -759,10 +814,18 @@ app.addEventListener("click", function (event) {
     const exercise = createExercise(search.trim());
     addExerciseToSession(exercise.id);
     view = "session";
-    } else if (action === "open-backup") {
+  } else if (action === "open-backup") {
     view = "backup";
   } else if (action === "close-backup") {
     view = "history";
+    } else if (action === "open-exercises") {
+    view = "exercises";
+  } else if (action === "close-exercises") {
+    view = "history";
+  } else if (action === "delete-exercise") {
+    const exercise = findExercise(target.dataset.id);
+    if (!confirm(`Delete "${exercise.name}" from your exercise list?`)) return;
+    deleteExercise(exercise.id);
   } else if (action === "export-csv") {
     exportCsv();
   }

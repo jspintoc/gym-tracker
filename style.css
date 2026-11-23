@@ -219,3 +219,38 @@ button {
 .last-time-note {
   font-style: italic;
 }
+
+.history-links {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+}
+
+.history-links .text-button {
+  margin: 8px 0 0;
+}
+
+.exercise-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 56px;
+  padding: 4px 4px 4px 12px;
+  margin-top: 8px;
+  border-radius: 12px;
+  background: white;
+}
+
+.exercise-item span {
+  display: block;
+  font-size: 14px;
+  color: #777;
+}
+
+.exercise-item .delete {
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  font-size: 22px;
+}
