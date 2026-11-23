@@ -201,3 +201,9 @@ button {
 .card h3 {
   margin-top: 0;
 }
+.file-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}

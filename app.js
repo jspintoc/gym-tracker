@@ -16,8 +16,12 @@ function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
+let idCounter = 0;
+
 function newId(prefix) {
-  return prefix + "-" + Date.now();
+  // Date.now() alone repeats within the same millisecond; the counter never does
+  idCounter++;
+  return prefix + "-" + Date.now() + "-" + idCounter;
 }
 
 let data = loadData();
@@ -203,6 +207,169 @@ function buildCsv() {
   });
 
   return lines.join("\r\n");
+}
+function parseCsv(text) {
+  // Remove the BOM if the file starts with it
+  if (text.startsWith("\uFEFF")) {
+    text = text.slice(1);
+  }
+
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+
+    if (inQuotes) {
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          // "" inside quotes means one real quote
+          cell += '"';
+          i++;   // skip the second quote
+        } else {
+          inQuotes = false;   // closing quote
+        }
+      } else {
+        cell += char;   // commas and line breaks are plain text here
+      }
+    } else {
+      if (char === '"') {
+        inQuotes = true;
+      } else if (char === ",") {
+        row.push(cell);
+        cell = "";
+      } else if (char === "\n") {
+        row.push(cell);
+        rows.push(row);
+        row = [];
+        cell = "";
+      } else if (char === "\r") {
+        // ignore: in "\r\n" the "\n" already ends the row
+      } else {
+        cell += char;
+      }
+    }
+  }
+
+  // The last row may not end with a line break
+  if (cell !== "" || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+
+  return rows;
+}
+function toNumber(text) {
+  // Empty cell = no value; anything else becomes a number (NaN if it is not one)
+  return text === "" ? null : Number(text);
+}
+
+function findOrPrepareExercise(name, unit, newExercises) {
+  const key = name.trim().toLowerCase();
+  const sameName = function (exercise) {
+    return exercise.name.trim().toLowerCase() === key;
+  };
+
+  // Look in the real catalog first, then among the ones prepared in this import
+  const existing = data.exercises.find(sameName) || newExercises.find(sameName);
+  if (existing) return existing;
+
+  const exercise = {
+    id: newId("ex"),
+    name: name.trim(),
+    defaultUnit: UNITS.includes(unit) ? unit : "kg"
+  };
+  newExercises.push(exercise);   // NOT data.exercises: nothing is saved yet
+  return exercise;
+}
+
+function readBackup(text) {
+  // Skip blank lines (Excel sometimes adds one at the end)
+  const rows = parseCsv(text).filter(function (cells) {
+    return !(cells.length === 1 && cells[0] === "");
+  });
+
+  if (rows.length === 0 || rows[0].join(",") !== CSV_COLUMNS.join(",")) {
+    return { error: "This doesn't look like a Gym Tracker backup." };
+  }
+
+  const sessions = [];
+  const newExercises = [];
+  const skippedIds = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const cells = rows[i];
+    const line = i + 1;   // line number as you would see it in the file
+
+    if (cells.length !== CSV_COLUMNS.length) {
+      return { error: "Line " + line + " has " + cells.length +
+                      " columns instead of " + CSV_COLUMNS.length + "." };
+    }
+
+    // Turn the cells into an object: { session_id: "...", date: "...", ... }
+    const row = {};
+    CSV_COLUMNS.forEach(function (column, c) {
+      row[column] = cells[c];
+    });
+
+    if (row.session_id === "" || row.date === "") {
+      return { error: "Line " + line + " is missing the session id or date." };
+    }
+
+    // 1. Sessions already on this device are skipped: the device wins
+    if (findSession(row.session_id)) {
+      if (!skippedIds.includes(row.session_id)) skippedIds.push(row.session_id);
+      continue;
+    }
+
+    // 2. Find this row's session in the import, or start it
+    let s = sessions.find(function (x) {
+      return x.id === row.session_id;
+    });
+    if (!s) {
+      s = {
+        id: row.session_id,
+        date: row.date,
+        name: row.session,
+        notes: row.session_notes,
+        exercises: []
+      };
+      sessions.push(s);
+    }
+
+    // A row with no exercise is a session with no exercises
+    if (row.exercise === "") continue;
+
+    // 3. New exercise entry if the exercise changes or the set number goes back to 1
+    const exercise = findOrPrepareExercise(row.exercise, row.unit, newExercises);
+    let entry = s.exercises[s.exercises.length - 1];
+    if (!entry || entry.exerciseId !== exercise.id || row.set === "1") {
+      entry = { exerciseId: exercise.id, notes: row.exercise_notes, sets: [] };
+      s.exercises.push(entry);
+    }
+
+    // A row with no set number is an exercise with no sets
+    if (row.set === "") continue;
+
+    // 4. The set itself
+    const weight = toNumber(row.weight);
+    const reps = toNumber(row.reps);
+    if (Number.isNaN(weight) || Number.isNaN(reps)) {
+      return { error: "Line " + line + " has a weight or reps that is not a number " +
+                      "(use a dot for decimals: 22.5)." };
+    }
+
+    entry.sets.push({
+      weight: weight,
+      unit: UNITS.includes(row.unit) ? row.unit : "kg",
+      reps: reps,
+      type: row.type === "drop" ? "drop" : "normal"
+    });
+  }
+
+  return { sessions: sessions, newExercises: newExercises, skipped: skippedIds.length };
 }
 
 // ===== 2. UI STATE: what is on screen (not saved) =====
@@ -390,6 +557,15 @@ function renderBackup() {
       <p>Save all your sessions as a CSV file. Keep it somewhere safe
          (Files, iCloud or email it to yourself).</p>
       <button class="primary" data-action="export-csv">Export CSV</button>
+    </section>
+        <section class="card">
+      <h3>Import</h3>
+      <p>Restore sessions from a backup file. Sessions already on this device
+         stay as they are; only new ones are added.</p>
+      <label class="primary file-button">
+        Import CSV
+        <input type="file" id="import-file" accept=".csv,text/csv" hidden>
+      </label>
     </section>`;
 }
 function render() {
@@ -431,6 +607,44 @@ function exportCsv() {
   setTimeout(function () {
     URL.revokeObjectURL(url);
   }, 1000);
+}
+// --- Import a backup file ---
+
+function importCsv(file) {
+  file.text().then(function (text) {
+    const result = readBackup(text);
+
+    if (result.error) {
+      alert(result.error + "\n\nNothing was imported.");
+      return;
+    }
+
+    const newCount = result.sessions.length;
+    const total = newCount + result.skipped;
+
+    if (newCount === 0) {
+      alert("Found " + total + " sessions in this file. " +
+            "All of them are already on this device: nothing to import.");
+      return;
+    }
+
+    let message = "Found " + total + " sessions in this file: " +
+                  newCount + " new, " + result.skipped + " already on this device.";
+    if (result.newExercises.length > 0) {
+      message += "\n" + result.newExercises.length + " new exercises will be added to your list.";
+    }
+    message += "\n\nImport " + newCount + " new sessions?";
+
+    if (!confirm(message)) return;
+
+    // Checked and confirmed: now, and only now, the real data changes
+    data.exercises.push(...result.newExercises);
+    data.sessions.push(...result.sessions);
+    saveData();
+    render();
+  }).catch(function (error) {
+    alert("Could not read the file: " + error.message);
+  });
 }
 
 // ===== 4. EVENTS: react to what the user does =====
@@ -497,6 +711,7 @@ app.addEventListener("click", function (event) {
 
 app.addEventListener("input", function (event) {
   const input = event.target;
+  if (input.type === "file") return;   // handled by the "change" listener
 
   if (input.id === "search") {
     search = input.value;
@@ -522,6 +737,16 @@ app.addEventListener("input", function (event) {
   }
 
   saveData();
+});
+app.addEventListener("change", function (event) {
+  const input = event.target;
+  if (input.id !== "import-file") return;
+
+  const file = input.files[0];
+  if (file) importCsv(file);
+
+  // Reset, so choosing the same file again still fires "change"
+  input.value = "";
 });
 
 // ===== 5. START =====
