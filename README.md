@@ -10,6 +10,8 @@ A personal web app to log gym workouts, set by set. Built from scratch while lea
 - Data stays on your device (browser storage), no accounts or server
 - Installable on the phone's home screen and works offline (PWA)
 - CSV backup: export your sessions and restore them on any device
+- "Last time" hint: see what you did in the previous session of each exercise
+- Exercise list: review how often each exercise is used and delete unused ones
 
 ## Built with
 
@@ -26,3 +28,5 @@ A personal web app to log gym workouts, set by set. Built from scratch while lea
 - [ ] Prefill sets from last time
 - [ ] Progressive overload suggestions
 - [ ] Progress charts
+- [ ] Rename exercises
+- [ ] Import workout history from WhatsApp
