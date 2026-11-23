@@ -1,5 +1,5 @@
 // Change this version every time you publish changes to the app files
-const CACHE_NAME = "gym-tracker-v2";
+const CACHE_NAME = "gym-tracker-v3";
 
 // Files the app needs to work offline
 const APP_FILES = [
@@ -29,7 +29,8 @@ self.addEventListener("install", (event) => {
 // 2. Activate: delete caches from older versions
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((names) =>
+    caches.keys()
+    .then((names) =>
       Promise.all(
         names
           .filter((name) => name !== CACHE_NAME)

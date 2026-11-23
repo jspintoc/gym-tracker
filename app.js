@@ -126,10 +126,88 @@ function toggleDrop(exIndex, setIndex) {
 function deleteSet(exIndex, setIndex) {
   session.exercises[exIndex].sets.splice(setIndex, 1);
 }
+// --- Backup (CSV) ---
+
+const CSV_COLUMNS = [
+  "session_id", "date", "session", "session_notes",
+  "exercise", "exercise_notes", "set", "weight", "unit", "reps", "type"
+];
+
+function csvCell(value) {
+  // Missing values (null or undefined) become an empty cell
+  if (value === null || value === undefined) return "";
+
+  const text = String(value);
+  const needsQuotes =
+    text.includes(",") || text.includes('"') ||
+    text.includes("\n") || text.includes("\r");
+
+  if (needsQuotes) {
+    // Wrap in quotes and double any quote inside: He said "hi" -> "He said ""hi"""
+    return '"' + text.replaceAll('"', '""') + '"';
+  }
+  return text;
+}
+
+function csvRow(row) {
+  // Take the values in the order of CSV_COLUMNS; missing ones become empty cells
+  return CSV_COLUMNS.map(function (column) {
+    return csvCell(row[column]);
+  }).join(",");
+}
+
+function buildCsv() {
+  const lines = [CSV_COLUMNS.join(",")];
+
+  // Oldest first, like a logbook
+  const sorted = data.sessions.slice().sort(function (a, b) {
+    return a.date.localeCompare(b.date);
+  });
+
+  sorted.forEach(function (s) {
+    const sessionInfo = {
+      session_id: s.id,
+      date: s.date,
+      session: s.name,
+      session_notes: s.notes
+    };
+
+    // A session with no exercises still gets one row, so it is not lost
+    if (s.exercises.length === 0) {
+      lines.push(csvRow(sessionInfo));
+    }
+
+    s.exercises.forEach(function (entry) {
+      const exerciseInfo = {
+        ...sessionInfo,
+        exercise: findExercise(entry.exerciseId).name,
+        exercise_notes: entry.notes
+      };
+
+      // An exercise with no sets still gets one row, so its notes are not lost
+      if (entry.sets.length === 0) {
+        lines.push(csvRow(exerciseInfo));
+      }
+
+      entry.sets.forEach(function (set, setIndex) {
+        lines.push(csvRow({
+          ...exerciseInfo,
+          set: setIndex + 1,
+          weight: set.weight,
+          unit: set.unit,
+          reps: set.reps,
+          type: set.type
+        }));
+      });
+    });
+  });
+
+  return lines.join("\r\n");
+}
 
 // ===== 2. UI STATE: what is on screen (not saved) =====
 
-let view = "history";   // "history", "session" or "picker"
+let view = "history";   // "history", "session", "picker" or "backup"
 let session = null;     // the session currently open
 let search = "";
 
@@ -164,7 +242,9 @@ function render() {
 }
 
 function renderHistory() {
-  let html = `<button class="primary" data-action="new-session">+ New session</button>`;
+ let html = `
+  <button class="primary" data-action="new-session">+ New session</button>
+  <button class="text-button" data-action="open-backup">Backup ›</button>`;
 
   const sorted = data.sessions.slice().sort(function (a, b) {
     return b.date.localeCompare(a.date);
@@ -294,6 +374,64 @@ function renderPickerList() {
 
   document.getElementById("picker-list").innerHTML = html;
 }
+function renderBackup() {
+  let totalSets = 0;
+  data.sessions.forEach(function (s) {
+    totalSets += countSets(s);
+  });
+
+  app.innerHTML = `
+    <button class="back" data-action="close-backup">← History</button>
+    <h2>Backup</h2>
+    <p class="empty">On this device: ${data.sessions.length} sessions · ${totalSets} sets</p>
+
+    <section class="card">
+      <h3>Export</h3>
+      <p>Save all your sessions as a CSV file. Keep it somewhere safe
+         (Files, iCloud or email it to yourself).</p>
+      <button class="primary" data-action="export-csv">Export CSV</button>
+    </section>`;
+}
+function render() {
+  if (view === "history") {
+    renderHistory();
+  } else if (view === "session") {
+    renderSession();
+  } else if (view === "picker") {
+    renderPicker();
+  } else if (view === "backup") {
+    renderBackup();
+  }
+}
+// --- Export the backup as a file ---
+
+function exportCsv() {
+  const BOM = "\uFEFF";   // invisible mark that tells Excel the file is UTF-8
+  const today = new Date().toLocaleDateString("en-CA");
+  const fileName = "gym-tracker-backup-" + today + ".csv";
+  const file = new File([BOM + buildCsv()], fileName, { type: "text/csv" });
+
+  // Plan A: the system share menu (iPhone: Save to Files, iCloud, WhatsApp, Mail...)
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file] }).catch(function (error) {
+      // "AbortError" just means the user closed the menu: not a real error
+      if (error.name !== "AbortError") {
+        alert("Could not share the file: " + error.message);
+      }
+    });
+    return;
+  }
+
+  // Plan B: a normal download
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  setTimeout(function () {
+    URL.revokeObjectURL(url);
+  }, 1000);
+}
 
 // ===== 4. EVENTS: react to what the user does =====
 
@@ -345,6 +483,12 @@ app.addEventListener("click", function (event) {
     const exercise = createExercise(search.trim());
     addExerciseToSession(exercise.id);
     view = "session";
+    } else if (action === "open-backup") {
+    view = "backup";
+  } else if (action === "close-backup") {
+    view = "history";
+  } else if (action === "export-csv") {
+    exportCsv();
   }
 
   saveData();
