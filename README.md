@@ -18,7 +18,7 @@ A personal web app to log gym workouts, set by set. Built from scratch while lea
 
 ## Roadmap
 
-- [ ] Installable as an app (PWA) and usable offline
+- [x] Installable as an app (PWA) and usable offline
 - [ ] CSV backup (export / import)
 - [ ] Preload the previous session of each exercise
 - [ ] Progressive overload suggestions
